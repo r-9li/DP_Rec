@@ -85,11 +85,11 @@ def main(Opt):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--train_test', type=str, default='train')
+    parser.add_argument('--train_test', type=str, default='test')
     parser.add_argument('--Class_Number', type=int, default=4)
     parser.add_argument('--Input_Size', type=int, default=1)
     parser.add_argument('--Encoder_Param', type=dict, default=Encoder1D_Param)
-    parser.add_argument('--Drop_Rate', type=float, default=0.1)
+    parser.add_argument('--Drop_Rate', type=float, default=0.3)
     parser.add_argument('--Original_Compatible', type=str, default="non-conservative")
     parser.add_argument('--Hidden_Size', type=int, default=128)
     parser.add_argument('--Acc_Check_Step', type=int, default=10)
@@ -97,11 +97,11 @@ if __name__ == "__main__":
     parser.add_argument('--Data_Source', type=str, default='C4')
     parser.add_argument('--DataType', type=list, default=['UL'])
     parser.add_argument('--Dataset_Cache', type=bool, default=True)
-    parser.add_argument('--Num_Workers', type=int, default=16)
+    parser.add_argument('--Num_Workers', type=int, default=1)
     parser.add_argument('--Pin_Memory', type=bool, default=False)
     parser.add_argument('--Batch_Size', type=int, default=16)
     parser.add_argument('--CheckPoint', type=str,
-                        default='/mnt/c/Users/26593/Desktop/DP_Rec/experience/models/C4-UHF+UL.ckpt')
+                        default='/mnt/c/Users/26593/Desktop/DP_Rec/experience/models/epoch=3-val_final_acc_target=94.3800.ckpt')
 
     parser.add_argument('--Cross_Domain', type=bool, default=True)
     parser.add_argument('--Init_Weight', type=str,
@@ -113,8 +113,8 @@ if __name__ == "__main__":
     parser.add_argument('--Discriminator_Hidden_Size', type=int, default=64)
     parser.add_argument('--Target_Domain_Num', type=int, default=1)
     parser.add_argument('--Additional_Init', type=bool, default=False)
-    parser.add_argument('--Domain_Loss_Weight', type=float, default=1.)
-    parser.add_argument('--Diff_Loss_Weight', type=float, default=20.)
+    parser.add_argument('--Domain_Loss_Weight', type=float, default=3.)
+    parser.add_argument('--Diff_Loss_Weight', type=float, default=2.)
 
     opt = parser.parse_args()
     main(opt)

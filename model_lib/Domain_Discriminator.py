@@ -12,6 +12,16 @@ class DomainDiscriminator(nn.Module):
             nn.BatchNorm1d(hidden_size),
             nn.LeakyReLU(0.2, inplace=True),
             nn.AvgPool1d(2))
+        self.layer2 = nn.Sequential(
+            nn.Conv1d(hidden_size, hidden_size, kernel_size=3, padding=1),
+            nn.BatchNorm1d(hidden_size),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.AvgPool1d(2))
+        self.layer3 = nn.Sequential(
+            nn.Conv1d(hidden_size, hidden_size, kernel_size=3, padding=1),
+            nn.BatchNorm1d(hidden_size),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.AvgPool1d(2))
 
         self.pool = nn.AdaptiveAvgPool1d(1)
         self.fc1 = nn.Linear(hidden_size, hidden_size // 2)
@@ -20,6 +30,8 @@ class DomainDiscriminator(nn.Module):
 
     def forward(self, x):
         out = self.layer1(x)
+        out = self.layer2(out)
+        out = self.layer3(out)
         out = self.pool(out)
         out = out.squeeze()
         out = self.final_norm(F.relu(self.fc1(out)))
