@@ -1,42 +1,39 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from model_lib.Res_1D import ResCNNStack
 
 
 class DomainDiscriminator(nn.Module):
 
     def __init__(self, input_size, hidden_size, target_domain_num=1):
         super(DomainDiscriminator, self).__init__()
-        self.layer1 = nn.Sequential(
-            nn.Conv1d(input_size, hidden_size, kernel_size=3, padding=1),
-            nn.BatchNorm1d(hidden_size),
-            nn.LeakyReLU(0.2, inplace=True),
-            nn.AvgPool1d(2))
-        self.layer2 = nn.Sequential(
-            nn.Conv1d(hidden_size, hidden_size, kernel_size=3, padding=1),
-            nn.BatchNorm1d(hidden_size),
-            nn.LeakyReLU(0.2, inplace=True),
-            nn.AvgPool1d(2))
-        self.layer3 = nn.Sequential(
-            nn.Conv1d(hidden_size, hidden_size, kernel_size=3, padding=1),
-            nn.BatchNorm1d(hidden_size),
-            nn.LeakyReLU(0.2, inplace=True),
-            nn.AvgPool1d(2))
+        kernel_size_list = []
+        drop_rate_list = []
+        use_sk_list = []
+        use_cbam_list = []
+        for i in range(2):
+            kernel_size_list.append(3)
+            drop_rate_list.append(0.15)
+            use_sk_list.append(True)
+            use_cbam_list.append(True)
 
-        self.pool = nn.AdaptiveAvgPool1d(1)
-        self.fc1 = nn.Linear(hidden_size, hidden_size // 2)
-        self.final_norm = nn.BatchNorm1d(hidden_size // 2)
-        self.fc2 = nn.Linear(hidden_size // 2, target_domain_num + 1)
+        self.CNN_layer = ResCNNStack(input_size, hidden_size, 3, kernel_size_list, drop_rate_list, use_sk_list,
+                                     use_cbam_list)
+
+        self.pool = nn.AdaptiveMaxPool1d(1)
+        self.bn = nn.BatchNorm1d(hidden_size, eps=1e-3)
+        self.CNN_layer1 = nn.Conv1d(hidden_size, 1, 3)
 
     def forward(self, x):
-        out = self.layer1(x)
-        out = self.layer2(out)
-        out = self.layer3(out)
+        out = self.CNN_layer(x)
+        out = self.bn(out)
+        out = F.relu(out)
+        out = self.CNN_layer1(out)
         out = self.pool(out)
         out = out.squeeze()
-        out = self.final_norm(F.relu(self.fc1(out)))
-        out = self.fc2(out)
-        return out  # CELoss
+        out = out.unsqueeze(-1)
+        return out  # BCELoss
 
 
 if __name__ == "__main__":

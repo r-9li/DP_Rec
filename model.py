@@ -1,12 +1,11 @@
+import lightning.pytorch as pl
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import lightning.pytorch as pl
+
 from DP_Net import DP_Net
 from DP_Net_CrossDomain import DP_Net_CrossDomain
 from model_lib.Diff_Loss import DiffLoss
-import math
-import numpy as np
 
 
 def accuracy(output, label):
@@ -87,7 +86,7 @@ class DP_Net_CrossDomain_Lightning(pl.LightningModule):
                                           hidden_size, discriminator_hidden_size, target_domain_num)
 
         self.class_loss = nn.CrossEntropyLoss()
-        self.domain_loss = nn.CrossEntropyLoss()
+        self.domain_loss = nn.BCEWithLogitsLoss()
         self.diff_loss = DiffLoss()
 
         self.domain_loss_weight = domain_loss_weight
@@ -100,6 +99,8 @@ class DP_Net_CrossDomain_Lightning(pl.LightningModule):
 
         self.test_acc_source = []
         self.test_acc_target = []
+
+        self.save_hyperparameters()
 
     def init_subnetwork(self, weight_path, additional_init=False):
         weight = torch.load(weight_path)['state_dict']
@@ -134,21 +135,21 @@ class DP_Net_CrossDomain_Lightning(pl.LightningModule):
         Loss_cls = self.class_loss(pred_class_label, label)
 
         Loss_domain_share_source = self.domain_loss(pred_domain_label_share_source,
-                                                    torch.zeros(batch_size,
-                                                                dtype=torch.int64).cuda())  # Source Domain 0 Target Domain 1
+                                                    torch.zeros(
+                                                        (batch_size, 1)).cuda())  # Source Domain 0 Target Domain 1
         Loss_domain_private_source = self.domain_loss(pred_domain_label_private_source,
-                                                      torch.zeros(batch_size, dtype=torch.int64).cuda())
+                                                      torch.zeros((batch_size, 1)).cuda())
         Loss_domain_share_target = self.domain_loss(pred_domain_label_share_target,
-                                                    torch.ones(batch_size, dtype=torch.int64).cuda())
+                                                    torch.ones((batch_size, 1)).cuda())
         Loss_domain_private_target = self.domain_loss(pred_domain_label_private_target,
-                                                      torch.ones(batch_size, dtype=torch.int64).cuda())
+                                                      torch.ones((batch_size, 1)).cuda())
 
-        Loss_domain = Loss_domain_share_source + Loss_domain_private_source + Loss_domain_share_target + Loss_domain_private_target
+        Loss_domain = Loss_domain_private_source + Loss_domain_private_target + Loss_domain_share_target + Loss_domain_share_source
 
         Loss_diff = self.diff_loss(feature_share_source, feature_private_source)
         Loss_diff += self.diff_loss(feature_share_target, feature_private_target)
 
-        Loss = Loss_cls + self.domain_loss_weight * Loss_domain + self.diff_loss_weight * Loss_diff
+        Loss = self.domain_loss_weight * Loss_domain + self.diff_loss_weight * Loss_diff + Loss_cls
 
         self.log('Loss_domain_share_source', Loss_domain_share_source, prog_bar=True)
         self.log('Loss_domain_private_source', Loss_domain_private_source, prog_bar=True)

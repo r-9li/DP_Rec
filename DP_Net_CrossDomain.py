@@ -41,9 +41,9 @@ class DP_Net_CrossDomain(nn.Module):
             pred_domain_label_share_target = self.Domain_Discriminator(feature_share_target_reverse)
 
             pred_domain_label_private_source = self.Domain_Discriminator(
-                torch.add(feature_private_source, feature_share_source))
+                feature_private_source)
             pred_domain_label_private_target = self.Domain_Discriminator(
-                torch.add(feature_private_target, feature_share_target))
+                feature_private_target)
             return (
                 feature_share_target, feature_share_source, feature_private_target, feature_private_source,
                 pred_class_label,
