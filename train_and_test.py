@@ -33,10 +33,11 @@ def main(Opt):
         PD_DataPL_CrossDomain = PD_PLDataModule_CrossDomain(Opt.Dataset_Path, Opt.Source_Domain, Opt.Target_Domain,
                                                             Opt.DataType, Opt.Num_Workers, Opt.Pin_Memory,
                                                             Opt.Batch_Size, Opt.Dataset_Cache, Opt.Target_Source_Rate,
-                                                            Opt.Spurious_Label_Update)
+                                                            Opt.Spurious_Label_Update, Opt.Init_Conf_Threshold)
         if Opt.train_test == 'train':
             DP_Network_CrossDomain = DP_Net_CrossDomain_Lightning(Opt.Class_Number, Opt.Input_Size, Opt.Encoder_Param,
                                                                   Opt.Domain_Loss_Weight, Opt.Diff_Loss_Weight,
+                                                                  Opt.Target_Loss_Weight,
                                                                   Opt.Drop_Rate,
                                                                   Opt.Original_Compatible, Opt.Hidden_Size,
                                                                   Opt.Discriminator_Hidden_Size, Opt.Target_Domain_Num,
@@ -98,7 +99,7 @@ if __name__ == "__main__":
     parser.add_argument('--Acc_Check_Step', type=int, default=10)
     parser.add_argument('--Dataset_Path', type=str, default='/home/r/DP_Data/Processed_Data')  # remote
     parser.add_argument('--Data_Source', type=str, default='SF6')
-    parser.add_argument('--DataType', type=list, default=['UL'])
+    parser.add_argument('--DataType', type=list, default=['UHF'])
     parser.add_argument('--Dataset_Cache', type=bool, default=True)
     parser.add_argument('--Num_Workers', type=int, default=16)  # remote
     parser.add_argument('--Pin_Memory', type=bool, default=False)  # remote
@@ -108,7 +109,7 @@ if __name__ == "__main__":
 
     parser.add_argument('--Cross_Domain', type=bool, default=True)
     parser.add_argument('--Init_Weight', type=str,
-                        default='/mnt/c/Users/26593/Desktop/DP_Rec/experience/models/SF6-UL.ckpt')  # remote   /home/r/DP/experience/models
+                        default='/mnt/c/Users/26593/Desktop/DP_Rec/experience/models/SF6-UHF.ckpt')  # remote   /home/r/DP/experience/models
     parser.add_argument('--Source_Domain', type=str, default='SF6')
     parser.add_argument('--Target_Domain', type=str, default='C4')
     parser.add_argument('--Target_Source_Rate', type=float, default=0.1)
@@ -118,6 +119,8 @@ if __name__ == "__main__":
     parser.add_argument('--Additional_Init', type=bool, default=False)
     parser.add_argument('--Domain_Loss_Weight', type=float, default=0.3)
     parser.add_argument('--Diff_Loss_Weight', type=float, default=0.2)
+    parser.add_argument('--Target_Loss_Weight', type=float, default=0.15)
+    parser.add_argument('--Init_Conf_Threshold', type=float, default=0.75)
 
     opt = parser.parse_args()
     main(opt)

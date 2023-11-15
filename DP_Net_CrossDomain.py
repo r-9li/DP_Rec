@@ -36,6 +36,7 @@ class DP_Net_CrossDomain(nn.Module):
             feature_share_target_reverse = ReverseLayerF.apply(feature_share_target, alpha)
 
             pred_class_label = self.Classifier(feature_share_source)
+            pred_class_label_target = self.Classifier(feature_share_target)
 
             pred_domain_label_share_source = self.Domain_Discriminator(feature_share_source_reverse)
             pred_domain_label_share_target = self.Domain_Discriminator(feature_share_target_reverse)
@@ -48,7 +49,7 @@ class DP_Net_CrossDomain(nn.Module):
                 feature_share_target, feature_share_source, feature_private_target, feature_private_source,
                 pred_class_label,
                 pred_domain_label_share_source, pred_domain_label_share_target, pred_domain_label_private_source,
-                pred_domain_label_private_target)
+                pred_domain_label_private_target, pred_class_label_target)
         else:
             y = self.Feature_Encoder_Share(x)
             y = self.Classifier(y)

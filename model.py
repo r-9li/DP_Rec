@@ -5,7 +5,7 @@ import torch.nn.functional as F
 
 from DP_Net import DP_Net
 from DP_Net_CrossDomain import DP_Net_CrossDomain
-from model_lib.Diff_Loss import DiffLoss
+from model_lib.Diff_Loss import DiffLoss, Target_class_Loss
 
 
 def accuracy(output, label):
@@ -78,7 +78,8 @@ class DP_Net_Lightning(pl.LightningModule):
 
 
 class DP_Net_CrossDomain_Lightning(pl.LightningModule):
-    def __init__(self, classes_number, input_size, Encoder_Param, domain_loss_weight, diff_loss_weight, drop_rate=0.1,
+    def __init__(self, classes_number, input_size, Encoder_Param, domain_loss_weight, diff_loss_weight,
+                 target_loss_weight, drop_rate=0.1,
                  original_compatible="non-conservative", hidden_size=128, discriminator_hidden_size=64,
                  target_domain_num=1, acc_check_step=100):
         super().__init__()
@@ -86,11 +87,13 @@ class DP_Net_CrossDomain_Lightning(pl.LightningModule):
                                           hidden_size, discriminator_hidden_size, target_domain_num)
 
         self.class_loss = nn.CrossEntropyLoss()
+        self.target_class_loss = Target_class_Loss(0.6, classes_number)
         self.domain_loss = nn.BCEWithLogitsLoss()
         self.diff_loss = DiffLoss()
 
         self.domain_loss_weight = domain_loss_weight
         self.diff_loss_weight = diff_loss_weight
+        self.target_loss_weight = target_loss_weight
 
         self.acc_check_step = acc_check_step
 
@@ -121,18 +124,18 @@ class DP_Net_CrossDomain_Lightning(pl.LightningModule):
             self.network.Feature_Encoder_Target.load_state_dict(feature_encoder_dict)
 
     def training_step(self, batch, batch_idx):
-        source, target, label = batch
+        source, target, label, target_loss_weight = batch
         batch_size = source.size(0)
-        # p = float(batch_idx + self.current_epoch * 450) / 3 / 450
-        # alpha = 2. / (1. + np.exp(-10 * p)) - 1
         alpha = 1.
 
         (feature_share_target, feature_share_source, feature_private_target, feature_private_source, pred_class_label,
          pred_domain_label_share_source, pred_domain_label_share_target, pred_domain_label_private_source,
-         pred_domain_label_private_target) = self.network(
+         pred_domain_label_private_target, pred_class_label_target) = self.network(
             (source, target, alpha))
 
         Loss_cls = self.class_loss(pred_class_label, label)
+
+        Loss_cls_target = self.target_class_loss(pred_class_label_target, label, batch_size, target_loss_weight)
 
         Loss_domain_share_source = self.domain_loss(pred_domain_label_share_source,
                                                     torch.zeros(
@@ -149,7 +152,7 @@ class DP_Net_CrossDomain_Lightning(pl.LightningModule):
         Loss_diff = self.diff_loss(feature_share_source, feature_private_source)
         Loss_diff += self.diff_loss(feature_share_target, feature_private_target)
 
-        Loss = self.domain_loss_weight * Loss_domain + self.diff_loss_weight * Loss_diff + Loss_cls
+        Loss = self.domain_loss_weight * Loss_domain + self.diff_loss_weight * Loss_diff + Loss_cls_target * self.target_loss_weight + Loss_cls  # TODO
 
         self.log('Loss_domain_share_source', Loss_domain_share_source, prog_bar=True)
         self.log('Loss_domain_private_source', Loss_domain_private_source, prog_bar=True)
@@ -157,6 +160,7 @@ class DP_Net_CrossDomain_Lightning(pl.LightningModule):
         self.log('Loss_domain_private_target', Loss_domain_private_target, prog_bar=True)
 
         self.log('Loss_cls', Loss_cls, prog_bar=True)
+        self.log('Loss_cls_target', Loss_cls_target, prog_bar=True)
         self.log('Loss_domain', Loss_domain, prog_bar=True)
         self.log('Loss_diff', Loss_diff, prog_bar=True)
         self.log('Loss', Loss, prog_bar=True)
@@ -204,5 +208,5 @@ class DP_Net_CrossDomain_Lightning(pl.LightningModule):
         self.log('test_final_acc_target', final_acc_target, prog_bar=True)
 
     def configure_optimizers(self):
-        optimizer = torch.optim.AdamW(self.parameters(), lr=1e-3)
+        optimizer = torch.optim.AdamW(self.parameters(), lr=1e-4)
         return optimizer
