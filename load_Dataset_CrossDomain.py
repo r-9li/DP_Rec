@@ -21,8 +21,10 @@ class Set_Spurious_Label_Callback(Callback):
 
 
 class PD_Dataset_CrossDomain(data.Dataset):
-    def __init__(self, Dataset_Path, Source_Domain, Target_Domain, DataType, train_val_test, Cache=False,
+    def __init__(self, Dataset_Path, Source_Domain, Target_Domain, DataType, train_val_test, Use_Spurious_Label,
+                 Cache=False,
                  Target_Source_rate=0.1, Spurious_Label_Update=5, Init_conf_threshold=0.75):
+        self.Use_Spurious_Label = Use_Spurious_Label
         self.Dataset_Path_Source = path.join(Dataset_Path, Source_Domain)
         self.Dataset_Path_Target = path.join(Dataset_Path, Target_Domain)
 
@@ -42,6 +44,7 @@ class PD_Dataset_CrossDomain(data.Dataset):
         # Target Domain
         self.Target_Label = {}  # 伪标签
         self.Target_Data_Name = []
+        self.Target_Data_Name_nosp = {}  # 分来源储存，直接从这里面抽取
         self.Target_Data = {}
         self.Target_Data_Filepath = {}
         self.Target_DataName_RandomMix = {}
@@ -50,6 +53,8 @@ class PD_Dataset_CrossDomain(data.Dataset):
         self.Conf_threshold = Init_conf_threshold
 
         for datatype in DataType:
+            if not self.Use_Spurious_Label:
+                self.Target_Data_Name_nosp[datatype] = []
             # Load Source Domain
             Source_Final_Data_Path = path.join(self.Dataset_Path_Source, datatype, train_val_test)
             with open(path.join(Source_Final_Data_Path, 'Label.txt'), 'r') as f:
@@ -66,7 +71,11 @@ class PD_Dataset_CrossDomain(data.Dataset):
                     line = line.strip('\n')
                     split_line = line.split(' ')
                     if random.random() < Target_Source_rate:  # 按比例采样
-                        self.Target_Data_Name.append(split_line[0])
+                        if self.Use_Spurious_Label:
+                            self.Target_Data_Name.append(split_line[0])
+                        else:
+                            self.Target_Data_Name.append(split_line[0])
+                            self.Target_Data_Name_nosp[datatype].append(split_line[0])
 
         # Load Source Domain
         if self.cache:
@@ -184,33 +193,41 @@ class PD_Dataset_CrossDomain(data.Dataset):
                 data = 0.8 * data + 0.2 * random_choice_data
 
         #  Get Target Domain Data
-        if data_name.startswith('UHF'):
-            if len(self.Target_DataName_RandomMix[label]['UHF']) != 0:  # Not Empty
-                random_choice_data_name = random.choice(self.Target_DataName_RandomMix[label]['UHF'])
-                if self.cache:
-                    target_data = self.Target_Data[random_choice_data_name]
-                    conf = self.Target_Label_conf[random_choice_data_name]
+        if self.Use_Spurious_Label:
+            if data_name.startswith('UHF'):
+                if len(self.Target_DataName_RandomMix[label]['UHF']) != 0:  # Not Empty
+                    random_choice_data_name = random.choice(self.Target_DataName_RandomMix[label]['UHF'])
+                    if self.cache:
+                        target_data = self.Target_Data[random_choice_data_name]
+                        conf = self.Target_Label_conf[random_choice_data_name]
+                    else:
+                        target_data = np.load(self.Target_Data_Filepath[random_choice_data_name])
+                        conf = self.Target_Label_conf[random_choice_data_name]
                 else:
-                    target_data = np.load(self.Target_Data_Filepath[random_choice_data_name])
-                    conf = self.Target_Label_conf[random_choice_data_name]
-            else:
-                target_data = data
-                conf = 0.
-        elif data_name.startswith('UL'):
-            if len(self.Target_DataName_RandomMix[label]['UL']) != 0:  # Not Empty
-                random_choice_data_name = random.choice(self.Target_DataName_RandomMix[label]['UL'])
-                if self.cache:
-                    target_data = self.Target_Data[random_choice_data_name]
-                    conf = self.Target_Label_conf[random_choice_data_name]
+                    target_data = data
+                    conf = 0.
+            elif data_name.startswith('UL'):
+                if len(self.Target_DataName_RandomMix[label]['UL']) != 0:  # Not Empty
+                    random_choice_data_name = random.choice(self.Target_DataName_RandomMix[label]['UL'])
+                    if self.cache:
+                        target_data = self.Target_Data[random_choice_data_name]
+                        conf = self.Target_Label_conf[random_choice_data_name]
+                    else:
+                        target_data = np.load(self.Target_Data_Filepath[random_choice_data_name])
+                        conf = self.Target_Label_conf[random_choice_data_name]
                 else:
-                    target_data = np.load(self.Target_Data_Filepath[random_choice_data_name])
-                    conf = self.Target_Label_conf[random_choice_data_name]
+                    target_data = data
+                    conf = 0.
             else:
-                target_data = data
+                target_data = None
                 conf = 0.
         else:
-            target_data = None
-            conf = 0.
+            if data_name.startswith('UHF'):
+                random_choice_data_name = random.choice(self.Target_Data_Name_nosp['UHF'])
+                target_data = self.Target_Data[random_choice_data_name]
+            elif data_name.startswith('UL'):
+                random_choice_data_name = random.choice(self.Target_Data_Name_nosp['UL'])
+                target_data = self.Target_Data[random_choice_data_name]
 
         if self.train_val_test == 'train':
             #  random scale augment
@@ -220,26 +237,34 @@ class PD_Dataset_CrossDomain(data.Dataset):
 
             # random mix augment
             if random.random() < 0.45:
-                if data_name.startswith('UHF'):
-                    if len(self.Target_DataName_RandomMix[label]['UHF']) != 0:  # Not Empty
-                        random_choice_data_name = random.choice(self.Target_DataName_RandomMix[label]['UHF'])
-                        if self.cache:
-                            random_choice_data = self.Target_Data[random_choice_data_name]
+                if self.Use_Spurious_Label:
+                    if data_name.startswith('UHF'):
+                        if len(self.Target_DataName_RandomMix[label]['UHF']) != 0:  # Not Empty
+                            random_choice_data_name = random.choice(self.Target_DataName_RandomMix[label]['UHF'])
+                            if self.cache:
+                                random_choice_data = self.Target_Data[random_choice_data_name]
+                            else:
+                                random_choice_data = np.load(self.Target_Data_Filepath[random_choice_data_name])
                         else:
-                            random_choice_data = np.load(self.Target_Data_Filepath[random_choice_data_name])
-                    else:
-                        random_choice_data = target_data
-                elif data_name.startswith('UL'):
-                    if len(self.Target_DataName_RandomMix[label]['UL']) != 0:  # Not Empty
-                        random_choice_data_name = random.choice(self.Target_DataName_RandomMix[label]['UL'])
-                        if self.cache:
-                            random_choice_data = self.Target_Data[random_choice_data_name]
+                            random_choice_data = target_data
+                    elif data_name.startswith('UL'):
+                        if len(self.Target_DataName_RandomMix[label]['UL']) != 0:  # Not Empty
+                            random_choice_data_name = random.choice(self.Target_DataName_RandomMix[label]['UL'])
+                            if self.cache:
+                                random_choice_data = self.Target_Data[random_choice_data_name]
+                            else:
+                                random_choice_data = np.load(self.Target_Data_Filepath[random_choice_data_name])
                         else:
-                            random_choice_data = np.load(self.Target_Data_Filepath[random_choice_data_name])
+                            random_choice_data = target_data
                     else:
-                        random_choice_data = target_data
+                        random_choice_data = None
                 else:
-                    random_choice_data = None
+                    if data_name.startswith('UHF'):
+                        random_choice_data_name = random.choice(self.Target_Data_Name_nosp['UHF'])
+                        random_choice_data = self.Target_Data[random_choice_data_name]
+                    elif data_name.startswith('UL'):
+                        random_choice_data_name = random.choice(self.Target_Data_Name_nosp['UL'])
+                        random_choice_data = self.Target_Data[random_choice_data_name]
 
                 target_data = 0.8 * target_data + 0.2 * random_choice_data
 
@@ -249,49 +274,54 @@ class PD_Dataset_CrossDomain(data.Dataset):
         target_data = torch.from_numpy(target_data.astype(np.float32)).view(1, -1)
 
         # conf to weight
-        scale = 10.
-        conf = (conf - self.Conf_threshold) * scale / (1 - self.Conf_threshold)
-        target_loss_weight = F.sigmoid(torch.tensor(conf - scale / 2))
+        if self.Use_Spurious_Label:
+            scale = 10.
+            conf = (conf - self.Conf_threshold) * scale / (1 - self.Conf_threshold)
+            target_loss_weight = F.sigmoid(torch.tensor(conf - scale / 2))
+        else:
+            target_loss_weight = 9  # 禁止返回None
 
         return (data, target_data, label, target_loss_weight)
 
     def Set_Spurious_Label(self, pl_model):
-        self.Target_Label.clear()
-        model: nn.Module = pl_model.network
-        model.eval()
-        with torch.no_grad():
-            for data_name in tqdm(self.Target_Data_Name):
-                data = self.Target_Data[data_name]
-                data = torch.from_numpy(data.astype(np.float32)).view(1, -1)
-                data = data.unsqueeze(0)
-                data = data.cuda()
-                pred = model(data)
-                pred = F.softmax(pred, dim=1)
-                conf, pred = torch.topk(pred, k=1, dim=1, largest=True, sorted=True)
-                pred = pred.squeeze()
-                if conf > self.Conf_threshold:
-                    self.Target_Label[data_name] = str(int(pred))
-                    self.Target_Label_conf[data_name] = float(conf)
+        if self.Use_Spurious_Label:
+            self.Target_Label.clear()
+            model: nn.Module = pl_model.network
+            model.eval()
+            with torch.no_grad():
+                for data_name in tqdm(self.Target_Data_Name):
+                    data = self.Target_Data[data_name]
+                    data = torch.from_numpy(data.astype(np.float32)).view(1, -1)
+                    data = data.unsqueeze(0)
+                    data = data.cuda()
+                    pred = model(data)
+                    pred = F.softmax(pred, dim=1)
+                    conf, pred = torch.topk(pred, k=1, dim=1, largest=True, sorted=True)
+                    pred = pred.squeeze()
+                    if conf > self.Conf_threshold:
+                        self.Target_Label[data_name] = str(int(pred))
+                        self.Target_Label_conf[data_name] = float(conf)
 
-        # Target Domain Mix
-        for key, value in self.Target_DataName_RandomMix.items():
-            for key1, value1 in value.items():
-                value1.clear()
+            # Target Domain Mix
+            for key, value in self.Target_DataName_RandomMix.items():
+                for key1, value1 in value.items():
+                    value1.clear()
 
-        for key, value in self.Target_Label.items():
-            if key.startswith('UHF'):
-                self.Target_DataName_RandomMix[value]['UHF'].append(key)
-            elif key.startswith('UL'):
-                self.Target_DataName_RandomMix[value]['UL'].append(key)
+            for key, value in self.Target_Label.items():
+                if key.startswith('UHF'):
+                    self.Target_DataName_RandomMix[value]['UHF'].append(key)
+                elif key.startswith('UL'):
+                    self.Target_DataName_RandomMix[value]['UL'].append(key)
 
-        print('Rate:', len(self.Target_Label) / len(self.Target_Data_Name))
-        self.Conf_threshold += 0.05
-        self.Conf_threshold = min(0.95, self.Conf_threshold)
-        model.train()
+            print('Rate:', len(self.Target_Label) / len(self.Target_Data_Name))
+            self.Conf_threshold += 0.05
+            self.Conf_threshold = min(0.95, self.Conf_threshold)
+            model.train()
 
 
 class PD_PLDataModule_CrossDomain(LightningDataModule):
     def __init__(self, Dataset_Path, Source_Domain, Target_Domain, DataType, Num_Workers, Pin_Memory, Batch_Size,
+                 Use_Spurious_Label,
                  Cache=False, Target_Source_rate=0.1,
                  Spurious_Label_Update=5, Init_conf_threshold=0.75):
         super().__init__()
@@ -302,6 +332,7 @@ class PD_PLDataModule_CrossDomain(LightningDataModule):
         self.Num_Workers = Num_Workers
         self.Pin_Memory = Pin_Memory
         self.batch_size = Batch_Size
+        self.Use_Spurious_Label = Use_Spurious_Label
         self.Cache = Cache
         self.Target_Source_rate = Target_Source_rate
         self.Spurious_Label_Update = Spurious_Label_Update
@@ -310,7 +341,8 @@ class PD_PLDataModule_CrossDomain(LightningDataModule):
     def setup(self, stage: str):
         if stage == 'fit':
             self.train_data = PD_Dataset_CrossDomain(self.Dataset_Path, self.Source_Domain, self.Target_Domain,
-                                                     self.DataType, 'train', self.Cache, self.Target_Source_rate,
+                                                     self.DataType, 'train', self.Use_Spurious_Label, self.Cache,
+                                                     self.Target_Source_rate,
                                                      self.Spurious_Label_Update, self.Init_conf_threshold)
 
             self.val_data_source = PD_Dataset(self.Dataset_Path, self.Source_Domain, self.DataType, 'val', self.Cache)
@@ -325,12 +357,12 @@ class PD_PLDataModule_CrossDomain(LightningDataModule):
 
     def val_dataloader(self):
         return [DataLoader(self.val_data_source, num_workers=self.Num_Workers, pin_memory=self.Pin_Memory,
-                           batch_size=self.batch_size, shuffle=True),
+                           batch_size=self.batch_size, shuffle=False),
                 DataLoader(self.val_data_target, num_workers=self.Num_Workers, pin_memory=self.Pin_Memory,
-                           batch_size=self.batch_size, shuffle=True)]
+                           batch_size=self.batch_size, shuffle=False)]
 
     def test_dataloader(self):
         return [DataLoader(self.test_data_source, num_workers=self.Num_Workers, pin_memory=self.Pin_Memory,
-                           batch_size=self.batch_size, shuffle=True),
+                           batch_size=self.batch_size, shuffle=False),
                 DataLoader(self.test_data_target, num_workers=self.Num_Workers, pin_memory=self.Pin_Memory,
-                           batch_size=self.batch_size, shuffle=True)]
+                           batch_size=self.batch_size, shuffle=False)]

@@ -79,11 +79,13 @@ class DP_Net_Lightning(pl.LightningModule):
 
 class DP_Net_CrossDomain_Lightning(pl.LightningModule):
     def __init__(self, classes_number, input_size, Encoder_Param, domain_loss_weight, diff_loss_weight,
-                 target_loss_weight, drop_rate=0.1,
+                 target_loss_weight, Use_Spurious_Label, drop_rate=0.1,
                  original_compatible="non-conservative", hidden_size=128, discriminator_hidden_size=64,
                  target_domain_num=1, acc_check_step=100):
         super().__init__()
-        self.network = DP_Net_CrossDomain(classes_number, input_size, Encoder_Param, drop_rate, original_compatible,
+        self.Use_Spurious_Label = Use_Spurious_Label
+        self.network = DP_Net_CrossDomain(classes_number, input_size, Encoder_Param, Use_Spurious_Label, drop_rate,
+                                          original_compatible,
                                           hidden_size, discriminator_hidden_size, target_domain_num)
 
         self.class_loss = nn.CrossEntropyLoss()
@@ -134,8 +136,8 @@ class DP_Net_CrossDomain_Lightning(pl.LightningModule):
             (source, target, alpha))
 
         Loss_cls = self.class_loss(pred_class_label, label)
-
-        Loss_cls_target = self.target_class_loss(pred_class_label_target, label, batch_size, target_loss_weight)
+        if self.Use_Spurious_Label:
+            Loss_cls_target = self.target_class_loss(pred_class_label_target, label, batch_size, target_loss_weight)
 
         Loss_domain_share_source = self.domain_loss(pred_domain_label_share_source,
                                                     torch.zeros(
@@ -152,7 +154,11 @@ class DP_Net_CrossDomain_Lightning(pl.LightningModule):
         Loss_diff = self.diff_loss(feature_share_source, feature_private_source)
         Loss_diff += self.diff_loss(feature_share_target, feature_private_target)
 
-        Loss = self.domain_loss_weight * Loss_domain + self.diff_loss_weight * Loss_diff + Loss_cls_target * self.target_loss_weight + Loss_cls  # TODO
+        if self.Use_Spurious_Label:
+            Loss = self.domain_loss_weight * Loss_domain + self.diff_loss_weight * Loss_diff + Loss_cls_target * self.target_loss_weight + Loss_cls
+
+        else:
+            Loss = self.domain_loss_weight * Loss_domain + self.diff_loss_weight * Loss_diff + Loss_cls
 
         self.log('Loss_domain_share_source', Loss_domain_share_source, prog_bar=True)
         self.log('Loss_domain_private_source', Loss_domain_private_source, prog_bar=True)
@@ -160,7 +166,8 @@ class DP_Net_CrossDomain_Lightning(pl.LightningModule):
         self.log('Loss_domain_private_target', Loss_domain_private_target, prog_bar=True)
 
         self.log('Loss_cls', Loss_cls, prog_bar=True)
-        self.log('Loss_cls_target', Loss_cls_target, prog_bar=True)
+        if self.Use_Spurious_Label:
+            self.log('Loss_cls_target', Loss_cls_target, prog_bar=True)
         self.log('Loss_domain', Loss_domain, prog_bar=True)
         self.log('Loss_diff', Loss_diff, prog_bar=True)
         self.log('Loss', Loss, prog_bar=True)
