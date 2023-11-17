@@ -10,7 +10,7 @@ from tqdm import tqdm
 
 
 class PD_Dataset(data.Dataset):
-    def __init__(self, Dataset_Path, Data_Source, DataType, train_val_test, Cache=False):
+    def __init__(self, Dataset_Path, Data_Source, DataType, train_val_test, classes_num, Cache=False):
         self.Dataset_Path = path.join(Dataset_Path, Data_Source)
 
         assert train_val_test in ['train', 'val', 'test']
@@ -24,14 +24,14 @@ class PD_Dataset(data.Dataset):
 
         self.train_val_test = train_val_test
 
-        for datatype in DataType:
+        for i, datatype in enumerate(DataType):
 
             Final_Data_Path = path.join(self.Dataset_Path, datatype, train_val_test)
             with open(path.join(Final_Data_Path, 'Label.txt'), 'r') as f:
                 for line in f.readlines():
                     line = line.strip('\n')
                     split_line = line.split(' ')
-                    self.label[split_line[0]] = split_line[1]
+                    self.label[split_line[0]] = str(int(split_line[1]) + classes_num * i)
                     self.Data_Name.append(split_line[0])
 
         if self.cache:
@@ -123,7 +123,8 @@ class PD_Dataset(data.Dataset):
 
 
 class PD_PLDataModule(LightningDataModule):
-    def __init__(self, Dataset_Path, Data_Source, DataType, Num_Workers, Pin_Memory, Batch_Size, Cache=False):
+    def __init__(self, Dataset_Path, Data_Source, DataType, Num_Workers, Pin_Memory, Batch_Size, Classes_num,
+                 Cache=False):
         super().__init__()
         self.Dataset_Path = Dataset_Path
         self.Data_Source = Data_Source
@@ -131,14 +132,18 @@ class PD_PLDataModule(LightningDataModule):
         self.Num_Workers = Num_Workers
         self.Pin_Memory = Pin_Memory
         self.batch_size = Batch_Size
+        self.Classes_num = Classes_num
         self.Cache = Cache
 
     def setup(self, stage: str):
         if stage == 'fit':
-            self.train_data = PD_Dataset(self.Dataset_Path, self.Data_Source, self.DataType, 'train', self.Cache)
-            self.val_data = PD_Dataset(self.Dataset_Path, self.Data_Source, self.DataType, 'val', self.Cache)
+            self.train_data = PD_Dataset(self.Dataset_Path, self.Data_Source, self.DataType, 'train', self.Classes_num,
+                                         self.Cache)
+            self.val_data = PD_Dataset(self.Dataset_Path, self.Data_Source, self.DataType, 'val', self.Classes_num,
+                                       self.Cache)
         if stage == 'test':
-            self.test_data = PD_Dataset(self.Dataset_Path, self.Data_Source, self.DataType, 'test', self.Cache)
+            self.test_data = PD_Dataset(self.Dataset_Path, self.Data_Source, self.DataType, 'test', self.Classes_num,
+                                        self.Cache)
 
     def train_dataloader(self):
         return DataLoader(self.train_data, num_workers=self.Num_Workers, pin_memory=self.Pin_Memory,
@@ -146,8 +151,8 @@ class PD_PLDataModule(LightningDataModule):
 
     def val_dataloader(self):
         return DataLoader(self.val_data, num_workers=self.Num_Workers, pin_memory=self.Pin_Memory,
-                          batch_size=self.batch_size, shuffle=True)
+                          batch_size=self.batch_size, shuffle=False)
 
     def test_dataloader(self):
         return DataLoader(self.test_data, num_workers=self.Num_Workers, pin_memory=self.Pin_Memory,
-                          batch_size=self.batch_size, shuffle=True)
+                          batch_size=self.batch_size, shuffle=False)

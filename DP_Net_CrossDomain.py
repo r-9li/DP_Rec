@@ -9,10 +9,11 @@ from model_lib.RevGradLayer import ReverseLayerF
 
 
 class DP_Net_CrossDomain(nn.Module):
-    def __init__(self, classes_number, input_size, Encoder_Param, drop_rate=0.1,
+    def __init__(self, classes_number, input_size, Encoder_Param, Use_Spurious_Label, drop_rate=0.1,
                  original_compatible="non-conservative", hidden_size=128, discriminator_hidden_size=64,
                  target_domain_num=1):
         super().__init__()
+        self.Use_Spurious_Label = Use_Spurious_Label
         self.Feature_Encoder_Share = DP_Feature_Encoder(input_size, Encoder_Param, drop_rate, original_compatible,
                                                         hidden_size)
         self.Feature_Encoder_Source = DP_Feature_Encoder(input_size, Encoder_Param, drop_rate, original_compatible,
@@ -36,7 +37,10 @@ class DP_Net_CrossDomain(nn.Module):
             feature_share_target_reverse = ReverseLayerF.apply(feature_share_target, alpha)
 
             pred_class_label = self.Classifier(feature_share_source)
-            pred_class_label_target = self.Classifier(feature_share_target)
+            if self.Use_Spurious_Label:
+                pred_class_label_target = self.Classifier(feature_share_target)
+            else:
+                pred_class_label_target = None
 
             pred_domain_label_share_source = self.Domain_Discriminator(feature_share_source_reverse)
             pred_domain_label_share_target = self.Domain_Discriminator(feature_share_target_reverse)
