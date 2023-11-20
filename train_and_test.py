@@ -123,7 +123,7 @@ if __name__ == "__main__":
                         default='/mnt/c/Users/26593/Desktop/DP_Rec/experience/models/epoch=0-val_final_acc=98.9528.ckpt')  # remote   /home/r/DP/experience/models
     parser.add_argument('--Source_Domain', type=str, default='SF6')
     parser.add_argument('--Target_Domain', type=str, default='C4')
-    parser.add_argument('--Target_Source_Rate', type=float, default=0.01)
+    parser.add_argument('--Target_Source_Rate', type=float, default=0.1)
     parser.add_argument('--Spurious_Label_Update', type=int, default=1)
     parser.add_argument('--Discriminator_Hidden_Size', type=int, default=128)
     parser.add_argument('--Target_Domain_Num', type=int, default=1)
